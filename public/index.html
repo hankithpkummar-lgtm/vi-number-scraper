@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vi SearchBot — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0f1724;--panel:#0b1220;--muted:#94a3b8;--accent:#7c3aed;--success:#10b981}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,
+      'Helvetica Neue',Arial;background:linear-gradient(180deg,#071124 0%,#071a2a 100%);color:#e6eef8}
+    .wrap{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;justify-content:space-between;align-items:center}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:10px;align-items:center}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03);padding:16px;border-radius:12px;margin-top:18px}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    button{background:var(--accent);border:0;color:white;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+    .small{padding:8px 10px;font-size:13px}
+    #logs{height:360px;overflow:auto;background:#020617;border-radius:8px;padding:12px;font-family:Menlo,monospace;color:#cfe}
+    .status{font-size:13px;color:var(--muted)}
+    .controls .mode{display:inline-flex;gap:8px;align-items:center;padding:6px;background:rgba(255,255,255,0.02);border-radius:8px}
+    .mode input{margin-right:6px}
+    .numbers{height:260px;overflow:auto;background:linear-gradient(180deg,#031022,#051827);padding:10px;border-radius:8px}
+    .top-actions{display:flex;gap:8px}
+    footer{margin-top:14px;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Vi SearchBot — Dashboard</h1>
+      <div class="status" id="status">Status: unknown</div>
+    </header>
+
+    <div class="card">
+      <div class="row" style="align-items:center">
+        <div>
+          <div class="controls">
+            <div class="mode">
+              <label><input type="radio" name="mode" value="worker" checked> Worker</label>
+              <label><input type="radio" name="mode" value="supervisor"> Supervisor</label>
+            </div>
+            <div class="top-actions">
+              <button id="start">Start</button>
+              <button id="stop" class="ghost small">Stop</button>
+              <button id="startTerminal" class="ghost small">Start (Terminal)</button>
+              <button id="stopTerminal" class="ghost small">Stop (Terminal)</button>
+              <button id="clearLogs" class="ghost small">Clear Logs</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button id="downloadCsv" class="small ghost">Download CSV</button>
+          <button id="refreshStatus" class="small ghost">Refresh</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 420px;gap:12px;margin-top:12px">
+        <div>
+          <h3 style="margin:6px 0 8px 0">Live Logs</h3>
+          <div id="logs"></div>
+        </div>
+        <div>
+          <h3 style="margin:6px 0 8px 0">Found Numbers</h3>
+          <div class="numbers" id="numbers"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer>Local only dashboard. Use responsibly and ensure you have permission to automate target sites.</footer>
+  </div>
+
+  <script>
+    const logsEl = document.getElementById('logs');
+    const numbersEl = document.getElementById('numbers');
+    const statusTag = document.getElementById('status');
+
+    function appendLog(txt){ const d=document.createElement('div'); d.textContent=txt; logsEl.appendChild(d); logsEl.scrollTop = logsEl.scrollHeight; }
+
+    const evt = new EventSource('/events');
+    evt.onopen = ()=> appendLog('SSE: connected');
+    evt.onerror = ()=> appendLog('SSE: disconnected (will attempt reconnect)');
+    evt.onmessage = e => { try{const j=JSON.parse(e.data); appendLog('['+j.time+'] '+j.line);}catch(e){} };
+
+    document.getElementById('start').onclick = async ()=>{
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      const r = await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+      const j = await r.json(); appendLog('START: '+JSON.stringify(j)); refreshStatus();
+    };
+
+    document.getElementById('stop').onclick = async ()=>{
+      const r=await fetch('/stop',{method:'POST'}); const j=await r.json(); appendLog('STOP: '+JSON.stringify(j)); refreshStatus(); };
+
+    document.getElementById('startTerminal').onclick = async ()=>{
+      const r=await fetch('/terminal/start',{method:'POST'}); const j=await r.json(); appendLog('TERMINAL START: '+JSON.stringify(j)); };
+
+    document.getElementById('stopTerminal').onclick = async ()=>{
+      const r=await fetch('/terminal/stop',{method:'POST'}); const j=await r.json(); appendLog('TERMINAL STOP: '+JSON.stringify(j)); };
+
+    document.getElementById('clearLogs').onclick = async ()=>{ const r=await fetch('/clearLogs',{method:'POST'}); const j=await r.json(); appendLog('CLEAR LOGS: '+JSON.stringify(j)); logsEl.innerHTML=''; };
+
+    document.getElementById('downloadCsv').onclick = async ()=>{ const a=document.createElement('a'); a.href='/numbers.csv'; a.download='numbers.csv'; document.body.appendChild(a); a.click(); a.remove(); };
+    document.getElementById('refreshStatus').onclick = refreshStatus;
+
+    async function refreshStatus(){ const r=await fetch('/status'); const j=await r.json(); statusTag.textContent = 'Status: ' + (j.running ? ('running (pid '+j.pid+')') : 'stopped'); }
+    refreshStatus();
+
+    document.getElementById('numbers').addEventListener('scroll',()=>{});
+    // load numbers on open
+    async function loadNumbers(){ const r=await fetch('/numbers'); const j=await r.json(); numbersEl.innerHTML=''; if(j.ok){ j.numbers.slice(0,500).forEach(n=>{ const el=document.createElement('div'); el.textContent = `${n.sheet} · ${n.number}`; el.style.padding='4px 0'; numbersEl.appendChild(el); }); } else { numbersEl.textContent = 'Error: '+j.error; }}
+    loadNumbers();
+  </script>
+</body>
+</html>

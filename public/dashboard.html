@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vi SearchBot — Premium Scraper Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #070a13;
+      --surface:      #0e1424;
+      --surface-card: #151e36;
+      --border:       rgba(255, 255, 255, 0.06);
+      --border-glow:  rgba(139, 92, 246, 0.15);
+      --accent:       #8b5cf6;
+      --accent-hover: #a78bfa;
+      --green:        #10b981;
+      --green-glow:   rgba(16, 185, 129, 0.15);
+      --amber:        #f59e0b;
+      --red:          #ef4444;
+      --text:         #f1f5f9;
+      --text-muted:   #64748b;
+      --text-sec:     #94a3b8;
+      --mono:         'JetBrains Mono', Menlo, monospace;
+      --glow:         0 0 20px rgba(139, 92, 246, 0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 10;
+    }
+
+    .brand-group { display: flex; align-items: center; gap: 16px; }
+    .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+    .brand em { color: var(--accent); font-style: normal; text-shadow: var(--glow); }
+    
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .status-pill.running { background: rgba(16,185,129,0.08); color: var(--green); border: 1px solid rgba(16,185,129,0.2); box-shadow: 0 0 15px rgba(16,185,129,0.05); }
+    .status-pill.stopped { background: rgba(100,116,139,0.08); color: var(--text-sec); border: 1px solid rgba(100,116,139,0.15); }
+
+    .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .pulse-dot.active { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.9); } }
+
+    .worker-chips-container { display: flex; gap: 6px; align-items: center; }
+    .w-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px; border-radius: 99px; font-size: 10px; font-weight: 600;
+      background: rgba(139, 92, 246, 0.08); color: var(--accent-hover);
+      border: 1px solid rgba(139, 92, 246, 0.15);
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    
+    .sys-ram { display: flex; align-items: center; gap: 8px; }
+    .sys-ram-track { width: 90px; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; position: relative; }
+    .sys-ram-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.8s ease; }
+    .sys-ram-txt { font-family: var(--mono); font-size: 11px; color: var(--text-sec); }
+
+    /* ── LAYOUT ── */
+    .container { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 250px; flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      padding: 20px 18px;
+      display: flex; flex-direction: column; gap: 20px;
+      overflow-y: auto; background: var(--surface);
+      z-index: 5;
+    }
+
+    .sb-section { display: flex; flex-direction: column; gap: 10px; }
+    .sb-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    /* Target Lead Form */
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+    .form-group label { font-size: 11px; font-weight: 500; color: var(--text-sec); }
+    .form-input {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
+      background: rgba(0,0,0,0.3);
+    }
+    .btn-save {
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      color: var(--accent-hover);
+      font-weight: 600;
+      font-size: 12px;
+      padding: 9px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .btn-save:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: var(--glow);
+    }
+    .btn-save.saved {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: var(--green);
+    }
+
+    /* Stepper */
+    .stepper { display: flex; align-items: center; background: rgba(0,0,0,0.15); border-radius: 8px; border: 1px solid var(--border); padding: 2px; }
+    .step-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      border: none; background: transparent;
+      color: var(--text-sec); cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .step-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .step-val {
+      flex: 1; text-align: center; font-size: 18px; font-weight: 700;
+      font-family: var(--mono); color: var(--text);
+    }
+
+    /* Mode Toggles */
+    .toggle-group { display: flex; flex-direction: column; gap: 8px; }
+    .tog-row { display: flex; align-items: center; justify-content: justify; justify-content: space-between; }
+    .tog-lbl { font-size: 12px; color: var(--text-sec); }
+    .tog { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .tog input { opacity: 0; width: 0; height: 0; }
+    .tog-slider {
+      position: absolute; inset: 0; background: rgba(255,255,255,0.06);
+      border-radius: 10px; cursor: pointer; transition: .2s;
+      border: 1px solid var(--border);
+    }
+    .tog-slider::before {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      left: 3px; top: 3px; background: var(--text-muted); border-radius: 50%; transition: .2s;
+    }
+    .tog input:checked + .tog-slider { background: var(--accent); border-color: var(--accent); }
+    .tog input:checked + .tog-slider::before { background: #fff; transform: translateX(16px); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 14px; border-radius: 8px; border: none; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 600;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 100%;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-start { background: var(--accent); color: #fff; box-shadow: var(--glow); }
+    .btn-start:hover { background: var(--accent-hover); }
+    .btn-stop { background: rgba(239, 68, 68, 0.08); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.15); }
+    .btn-stop:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.25); }
+    .btn-sub { background: rgba(255,255,255,0.03); color: var(--text-sec); border: 1px solid var(--border); }
+    .btn-sub:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+    /* Memory Sidebar Meter */
+    .mem-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .mem-stats { display: flex; justify-content: space-between; font-size: 11px; font-family: var(--mono); color: var(--text-sec); margin-bottom: 6px; }
+    .mem-track { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+    .mem-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width 0.8s ease; }
+    .mem-ideal { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 6px; }
+
+    /* ── MAIN CONTENT AREA ── */
+    main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+    /* Top Half: Console */
+    .top-section { height: 45%; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; background: #04060b; overflow: hidden; }
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 20px; border-bottom: 1px solid var(--border); background: rgba(14, 20, 36, 0.5); flex-shrink: 0;
+    }
+    .section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-sec); display: flex; align-items: center; gap: 6px; }
+    
+    .console-body {
+      flex: 1; overflow-y: auto; padding: 14px 20px;
+      font-family: var(--mono); font-size: 12px; line-height: 1.6;
+      color: #94a3b8;
+    }
+    .le-row { padding: 2px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.01); transition: background 0.1s; }
+    .le-row:hover { background: rgba(255, 255, 255, 0.02); }
+    .le-time { color: var(--text-muted); margin-right: 8px; }
+    .le-msg { word-break: break-all; }
+    
+    .le-row.success .le-msg { color: var(--green); text-shadow: 0 0 10px rgba(16, 185, 129, 0.15); }
+    .le-row.warning .le-msg { color: var(--amber); }
+    .le-row.error .le-msg { color: var(--red); }
+    .le-row.info .le-msg { color: var(--accent-hover); }
+
+    .micro-btn {
+      font-family: inherit; font-size: 10px; font-weight: 600;
+      padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-sec); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .micro-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+
+    /* Bottom Half: 4 Columns */
+    .bottom-section { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; background: #060911; }
+    
+    .num-col { display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+    .num-col:last-child { border-right: none; }
+    
+    .col-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: rgba(14, 20, 36, 0.3); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .col-title { font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .col-title span { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; background: rgba(139, 92, 246, 0.12); color: var(--accent-hover); font-size: 11px; font-weight: 700; }
+    
+    .badge-count {
+      padding: 2px 7px; border-radius: 6px; font-family: var(--mono); font-size: 10px; font-weight: 600;
+      background: rgba(255,255,255,0.05); color: var(--text-sec);
+      border: 1px solid var(--border);
+    }
+    .badge-count.active {
+      background: rgba(16, 185, 129, 0.08); color: var(--green); border-color: rgba(16, 185, 129, 0.15);
+    }
+
+    .col-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    
+    /* Sleek Number Item */
+    .num-card {
+      background: rgba(21, 30, 54, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .num-card:hover {
+      background: rgba(21, 30, 54, 0.8);
+      border-color: var(--accent);
+      box-shadow: var(--border-glow);
+      transform: translateY(-2px);
+    }
+    
+    .num-row-top { display: flex; align-items: center; justify-content: space-between; }
+    .num-val { font-family: var(--mono); font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.02em; }
+    .num-comp { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent-hover); }
+
+    .num-row-bottom { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--text-muted); }
+    .num-plan {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 9px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-sec);
+    }
+    
+    /* Empty State */
+    .empty-state {
+      margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      color: var(--text-muted); font-size: 11px; text-align: center; padding: 24px 12px;
+    }
+    .empty-icon { font-size: 20px; opacity: 0.3; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; top: 70px; right: 24px; z-index: 100;
+      padding: 12px 18px; border-radius: 10px; font-size: 12px; font-weight: 600;
+      display: none; animation: slideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      border-left: 4px solid transparent;
+    }
+    .toast.info { background: var(--surface-card); border-left-color: var(--accent); color: var(--text); }
+    .toast.warning { background: rgba(245, 158, 11, 0.12); border-left-color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.2); color: var(--amber); }
+    .toast.critical { background: rgba(239, 68, 68, 0.12); border-left-color: var(--red); border: 1px solid rgba(239, 68, 68, 0.2); color: var(--red); }
+    @keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand-group">
+      <div class="brand">Vi <em>SearchBot</em></div>
+      <div class="status-pill stopped" id="statusPill">
+        <div class="pulse-dot" id="statusDot"></div>
+        <span id="statusText">Stopped</span>
+      </div>
+      <div class="worker-chips-container" id="workerChips"></div>
+    </div>
+    
+    <div class="header-right">
+      <div class="sys-ram">
+        <div class="sys-ram-track">
+          <div class="sys-ram-fill" id="topRamFill" style="width: 0%"></div>
+        </div>
+        <span class="sys-ram-txt" id="topRamLabel">— / — GB</span>
+      </div>
+      <button class="micro-btn" id="refreshBtn" title="Force Reload sheet numbers">↺ Reload Sheet</button>
+    </div>
+  </header>
+
+  <!-- CONTAINER -->
+  <div class="container">
+    
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- Lead target configurations -->
+      <div class="sb-section">
+        <div class="sb-label">Lead Details (Vi Input)</div>
+        <div class="form-group">
+          <label for="fullnameInput">Full Name</label>
+          <input type="text" id="fullnameInput" class="form-input" placeholder="e.g. Hankith" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="mobileInput">Mobile Number</label>
+          <input type="text" id="mobileInput" class="form-input" placeholder="e.g. 9071977078" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="pincodeInput">Pincode</label>
+          <input type="text" id="pincodeInput" class="form-input" placeholder="e.g. 560100" autocomplete="off">
+        </div>
+        <button class="btn-save" id="saveConfigBtn">
+          Save Settings
+        </button>
+      </div>
+
+      <!-- Workers Stepper & Start/Stop -->
+      <div class="sb-section">
+        <div class="sb-label">Workers Limit</div>
+        <div class="stepper">
+          <button class="step-btn" id="dec" title="Decrease workers">−</button>
+          <div class="step-val" id="workerNum">12</div>
+          <button class="step-btn" id="inc" title="Increase workers">+</button>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button class="btn btn-start" id="startBtn">▶ Start Bot</button>
+          <button class="btn btn-stop" id="stopBtn">■ Stop</button>
+        </div>
+      </div>
+
+      <!-- Mode Options -->
+      <div class="sb-section">
+        <div class="sb-label">Dashboard Options</div>
+        <div class="toggle-group">
+          <div class="tog-row">
+            <span class="tog-lbl">Headless Search</span>
+            <label class="tog">
+              <input type="checkbox" id="headlessTog">
+              <span class="tog-slider"></span>
+            </label>
+          </div>
+          <div class="tog-row">
+            <span class="tog-lbl">Auto RAM Adjust</span>
+            <label class="tog">
+              <input type="checkbox" id="autoRamTog">
+              <span class="tog-slider"></span>
+            </label>
+          </div>
+          <div class="tog-row">
+            <span class="tog-lbl">Sound Alerts</span>
+            <label class="tog">
+              <input type="checkbox" id="soundTog" checked>
+              <span class="tog-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Memory Card -->
+      <div class="sb-section">
+        <div class="sb-label">Server Memory</div>
+        <div class="mem-card">
+          <div class="mem-stats">
+            <span id="ramFree">— free</span>
+            <span id="ramTotal">—</span>
+          </div>
+          <div class="mem-track">
+            <div class="mem-fill" id="ramFill" style="width: 0%"></div>
+          </div>
+          <div class="mem-ideal" id="idealLbl">Ideal: — workers</div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="sb-section" style="margin-top: auto;">
+        <div class="sb-label">Quick Actions</div>
+        <button class="btn btn-sub" id="clearLogsBtn">Clear Live Terminal</button>
+        <a href="/numbers.csv" download class="btn btn-sub" style="text-decoration: none; margin-top: 6px;">Export Sheet CSV</a>
+      </div>
+
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main>
+
+      <!-- Top Section: Console Logs -->
+      <div class="top-section">
+        <div class="section-head">
+          <span class="section-title">⚡ Live Terminal Output</span>
+          <button class="micro-btn" id="clearConsoleBtn">Clear Console</button>
+        </div>
+        <div class="console-body" id="liveLogs"></div>
+      </div>
+
+      <!-- Bottom Section: 4 columns of numbers -->
+      <div class="bottom-section">
+        
+        <!-- Total 1 Column -->
+        <div class="num-col">
+          <div class="col-header">
+            <div class="col-title"><span>1</span> Total 1</div>
+            <div class="badge-count" id="count1">0</div>
+          </div>
+          <div class="col-body" id="listTotal1">
+            <div class="empty-state">
+              <span class="empty-icon">🔍</span>
+              <span>No numbers found for Total 1</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Total 3 Column -->
+        <div class="num-col">
+          <div class="col-header">
+            <div class="col-title"><span>3</span> Total 3</div>
+            <div class="badge-count" id="count3">0</div>
+          </div>
+          <div class="col-body" id="listTotal3">
+            <div class="empty-state">
+              <span class="empty-icon">🔍</span>
+              <span>No numbers found for Total 3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Total 5 Column -->
+        <div class="num-col">
+          <div class="col-header">
+            <div class="col-title"><span>5</span> Total 5</div>
+            <div class="badge-count" id="count5">0</div>
+          </div>
+          <div class="col-body" id="listTotal5">
+            <div class="empty-state">
+              <span class="empty-icon">🔍</span>
+              <span>No numbers found for Total 5</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Total 6 Column -->
+        <div class="num-col">
+          <div class="col-header">
+            <div class="col-title"><span>6</span> Total 6</div>
+            <div class="badge-count" id="count6">0</div>
+          </div>
+          <div class="col-body" id="listTotal6">
+            <div class="empty-state">
+              <span class="empty-icon">🔍</span>
+              <span>No numbers found for Total 6</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Toast alert notification -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Dom Helpers ──────────────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    let headlessMode = false, autoRamMode = false, soundEnabled = true;
+    let maxWorkers = 12;
+    let lastLoadedState = { fullname: '', mobile: '', pincode: '' };
+
+    // Sound effects engine
+    function tone(freq, dur, type = 'sine', vol = 0.28) {
+      if (!soundEnabled) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(vol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur / 1000);
+        o.start(); o.stop(ctx.currentTime + dur / 1000);
+      } catch (_) {}
+    }
+    
+    function soundFound() {
+      tone(660, 100); 
+      setTimeout(() => tone(880, 100), 110); 
+      setTimeout(() => tone(1100, 180), 220);
+    }
+    function soundWarn() { tone(260, 350, 'sawtooth', 0.15); }
+    function soundSave() { tone(520, 80, 'sine', 0.2); setTimeout(() => tone(784, 120), 90); }
+
+    // ── RAM Meter ─────────────────────────────────────────────────────────────
+    function setRam(freeGB, totalGB) {
+      const pct = (((totalGB - freeGB) / totalGB) * 100).toFixed(1);
+      const col = freeGB < 0.8 ? 'var(--red)' : freeGB < 1.5 ? 'var(--amber)' : 'var(--green)';
+      
+      $('topRamFill').style.cssText = `width: ${pct}%; background: ${col}`;
+      $('topRamLabel').textContent = `${freeGB} / ${totalGB} GB`;
+      
+      $('ramFree').textContent = `${freeGB} GB free`;
+      $('ramTotal').textContent = `${totalGB} GB`;
+      $('ramFill').style.cssText = `width: ${pct}%; background: ${col}`;
+      
+      const per = headlessMode ? 0.55 : 1.2;
+      const ideal = Math.max(1, Math.min(12, Math.floor(parseFloat(freeGB) / per)));
+      $('idealLbl').textContent = `Ideal: ${ideal} worker${ideal !== 1 ? 's' : ''}`;
+    }
+
+    // ── Status Updater ──────────────────────────────────────────────────────────
+    function setStatus(running, pids, freeGB, totalGB) {
+      const pill = $('statusPill'), dot = $('statusDot'), txt = $('statusText');
+      if (running) {
+        pill.className = 'status-pill running'; dot.className = 'pulse-dot active';
+        txt.textContent = `${pids.length} Worker${pids.length !== 1 ? 's' : ''}`;
+      } else {
+        pill.className = 'status-pill stopped'; dot.className = 'pulse-dot';
+        txt.textContent = 'Stopped';
+      }
+      
+      const chips = $('workerChips');
+      chips.innerHTML = '';
+      pids.forEach((pid, i) => {
+        const c = document.createElement('div');
+        c.className = 'w-chip';
+        c.innerHTML = `<div class="pulse-dot active" style="margin-right: 4px; width: 4px; height: 4px;"></div>W${i+1} (${pid})`;
+        chips.appendChild(c);
+      });
+      
+      if (freeGB && totalGB) setRam(freeGB, totalGB);
+    }
+
+    // ── Log Streaming ────────────────────────────────────────────────────────────
+    function addLiveLog(text) {
+      const row = document.createElement('div');
+      row.className = 'le-row';
+      
+      if (text.includes('✅') || text.includes('▶') || text.includes('Saved') || text.includes('success')) {
+        row.classList.add('success');
+      } else if (text.includes('⚠') || text.includes('ERR') || text.includes('Low RAM') || text.includes('silence')) {
+        row.classList.add('warning');
+      } else if (text.includes('Error') || text.includes('Failed') || text.includes('exception')) {
+        row.classList.add('error');
+      } else if (text.includes('⚙') || text.includes('Settings')) {
+        row.classList.add('info');
+      }
+
+      // Compact date time stamp formatting
+      const timeStr = new Date().toLocaleTimeString();
+      
+      // Strip brackets and old timestamp if exist
+      let cleanText = text.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '').replace(/^\[[^\]]+\]\s*/, '');
+      
+      row.innerHTML = `<span class="le-time">[${timeStr}]</span><span class="le-msg">${cleanText}</span>`;
+      
+      const box = $('liveLogs');
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
+      
+      while (box.children.length > 800) box.removeChild(box.firstChild);
+
+      // Trigger tone on found numbers in logs
+      if (text.includes('✅ Eval') || text.includes('Saved Fancy Number')) {
+        soundFound();
+      }
+    }
+
+    // ── Render Harvested Numbers (By Single Totals 1, 3, 5, 6) ───────────────────
+    function renderGroupList(containerId, countId, items) {
+      const box = $(containerId);
+      const badge = $(countId);
+      
+      badge.textContent = items.length;
+      if (items.length > 0) {
+        badge.classList.add('active');
+      } else {
+        badge.classList.remove('active');
+      }
+      
+      if (items.length === 0) {
+        box.innerHTML = `
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <span>No numbers found yet</span>
+          </div>
+        `;
+        return;
+      }
+
+      box.innerHTML = '';
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'num-card';
+        card.title = `Double tap or click to copy: ${item.number}`;
+        card.onclick = () => {
+          navigator.clipboard.writeText(item.number);
+          addLiveLog(`⚙ Copied ${item.number} to clipboard!`);
+        };
+        
+        // Format timestamp
+        let formattedTime = '';
+        if (item.timestamp) {
+          try {
+            formattedTime = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } catch (_) {
+            formattedTime = String(item.timestamp);
+          }
+        }
+
+        card.innerHTML = `
+          <div class="num-row-top">
+            <span class="num-val">${item.number}</span>
+            <span class="num-comp" title="Compound total">${item.compoundTotal || ''}</span>
+          </div>
+          <div class="num-row-bottom">
+            <span class="num-plan">${item.plan || 'Prepaid'}</span>
+            <span>${formattedTime}</span>
+          </div>
+        `;
+        box.appendChild(card);
+      });
+    }
+
+    async function loadNums() {
+      try {
+        const j = await fetch('/numbers').then(r => r.json());
+        if (j.ok && j.groups) {
+          renderGroupList('listTotal1', 'count1', j.groups[1] || []);
+          renderGroupList('listTotal3', 'count3', j.groups[3] || []);
+          renderGroupList('listTotal5', 'count5', j.groups[5] || []);
+          renderGroupList('listTotal6', 'count6', j.groups[6] || []);
+        }
+      } catch (_) {}
+    }
+
+    // ── Toast Alert system ───────────────────────────────────────────────────────
+    let toastTimer;
+    function showToast(level, msg) {
+      const el = $('toast');
+      el.className = `toast ${level}`;
+      el.textContent = msg;
+      el.style.display = 'block';
+      
+      if (level === 'critical' || level === 'warning') {
+        soundWarn();
+      }
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    // ── SSE Event Source connection ──────────────────────────────────────────────
+    const es = new EventSource('/events');
+
+    es.addEventListener('status', ev => {
+      const j = JSON.parse(ev.data);
+      setStatus(j.running, j.pids || [], j.freeMemGB, j.totalMemGB);
+      
+      headlessMode = !!j.headless;
+      autoRamMode  = !!j.autoRam;
+      maxWorkers   = j.maxWorkers || maxWorkers;
+      
+      $('headlessTog').checked = headlessMode;
+      $('autoRamTog').checked  = autoRamMode;
+      $('workerNum').textContent = maxWorkers;
+
+      // Populate lead targets only if they differ and user is not currently focusing them
+      if (j.fullname && document.activeElement !== $('fullnameInput') && lastLoadedState.fullname !== j.fullname) {
+        $('fullnameInput').value = j.fullname;
+        lastLoadedState.fullname = j.fullname;
+      }
+      if (j.mobile && document.activeElement !== $('mobileInput') && lastLoadedState.mobile !== j.mobile) {
+        $('mobileInput').value = j.mobile;
+        lastLoadedState.mobile = j.mobile;
+      }
+      if (j.pincode && document.activeElement !== $('pincodeInput') && lastLoadedState.pincode !== j.pincode) {
+        $('pincodeInput').value = j.pincode;
+        lastLoadedState.pincode = j.pincode;
+      }
+    });
+
+    es.addEventListener('log', ev => {
+      const e = JSON.parse(ev.data);
+      addLiveLog(`[${e.time.slice(11,19)}] ${e.line}`);
+    });
+
+    es.addEventListener('logs', ev => {
+      const logsBox = $('liveLogs');
+      logsBox.innerHTML = '';
+      JSON.parse(ev.data).logs.slice(-200).forEach(e => {
+        addLiveLog(`[${e.time.slice(11,19)}] ${e.line}`);
+      });
+    });
+
+    es.addEventListener('ramAlert', ev => {
+      const j = JSON.parse(ev.data);
+      if (j.action === 'switched_headless') {
+        showToast('warning', `🌙 Switched to Headless mode due to low memory (${j.freeGB}GB free)`);
+      } else if (j.action === 'switched_headed') {
+        showToast('info', `☀ Switched to Headed mode — RAM healthy (${j.freeGB}GB free)`);
+      } else if (j.level === 'critical') {
+        showToast('critical', `⚠ Critical RAM Alert: Only ${j.freeGB}GB RAM remaining!`);
+      } else {
+        showToast('warning', `⚡ Low RAM alert: ${j.freeGB}GB available.`);
+      }
+    });
+
+    es.onerror = () => {
+      addLiveLog('⚠ Event connection disconnected. Retrying...');
+    };
+
+    // ── Control Event Handlers ──────────────────────────────────────────────────
+    $('dec').onclick = () => { 
+      maxWorkers = Math.max(1, maxWorkers - 1); 
+      $('workerNum').textContent = maxWorkers; 
+    };
+    $('inc').onclick = () => { 
+      maxWorkers = Math.min(12, maxWorkers + 1); 
+      $('workerNum').textContent = maxWorkers; 
+    };
+
+    $('startBtn').onclick = () => {
+      addLiveLog('▶ Requesting scraper bot startup...');
+      fetch('/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workers: maxWorkers })
+      }).then(r => r.json()).then(res => {
+        if (res.ok) {
+          showToast('info', `Successfully started ${res.workers} scraper workers!`);
+        } else {
+          showToast('warning', res.msg || 'Failed to start workers');
+        }
+      });
+    };
+
+    $('stopBtn').onclick = () => {
+      addLiveLog('■ Sending shutdown command to all active workers...');
+      fetch('/stop', { method: 'POST' }).then(r => r.json()).then(res => {
+        if (res.ok) {
+          showToast('info', 'All workers halted cleanly.');
+        }
+      });
+    };
+
+    $('headlessTog').onchange = async () => {
+      const j = await fetch('/headless', { method: 'POST' }).then(r => r.json());
+      headlessMode = j.headless;
+      showToast('info', `Headless Mode: ${headlessMode ? 'Enabled' : 'Disabled'}`);
+    };
+
+    $('autoRamTog').onchange = e => {
+      fetch('/autoram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: e.target.checked })
+      }).then(() => {
+        showToast('info', `Auto RAM dynamic adjustment: ${e.target.checked ? 'Enabled' : 'Disabled'}`);
+      });
+    };
+
+    $('soundTog').onchange = e => {
+      soundEnabled = e.target.checked;
+      showToast('info', `Audio feedback: ${soundEnabled ? 'On' : 'Off'}`);
+    };
+
+    // Lead Target settings save
+    $('saveConfigBtn').onclick = () => {
+      const name = $('fullnameInput').value.trim();
+      const mob = $('mobileInput').value.trim();
+      const pin = $('pincodeInput').value.trim();
+      
+      if (!name || !mob || !pin) {
+        showToast('warning', 'All lead target fields (Name, Mobile, Pincode) must be filled!');
+        return;
+      }
+      
+      const saveBtn = $('saveConfigBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      
+      fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, mobile: mob, pincode: pin })
+      })
+      .then(r => r.json())
+      .then(res => {
+        saveBtn.disabled = false;
+        if (res.ok) {
+          lastLoadedState = { fullname: res.fullname, mobile: res.mobile, pincode: res.pincode };
+          saveBtn.textContent = 'Saved Successfully!';
+          saveBtn.classList.add('saved');
+          soundSave();
+          showToast('info', 'Lead config saved. Active/new workers updated automatically!');
+          
+          setTimeout(() => {
+            saveBtn.textContent = 'Save Settings';
+            saveBtn.classList.remove('saved');
+          }, 3000);
+        } else {
+          saveBtn.textContent = 'Save Settings';
+          showToast('critical', 'Failed to save configuration details.');
+        }
+      })
+      .catch(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
+        showToast('critical', 'Connection error while saving settings.');
+      });
+    };
+
+    $('clearLogsBtn').onclick = () => {
+      $('liveLogs').innerHTML = '';
+      showToast('info', 'Live terminal cleared.');
+    };
+    
+    $('clearConsoleBtn').onclick = () => {
+      $('liveLogs').innerHTML = '';
+    };
+
+    $('refreshBtn').onclick = () => {
+      addLiveLog('⚙ Reloading fancy numbers sheets...');
+      loadNums().then(() => {
+        showToast('info', 'Grouped list re-rendered from spreadsheet');
+      });
+    };
+
+    // ── Init ─────────────────────────────────────────────────────────────────────
+    setInterval(loadNums, 10000);
+    loadNums();
+    addLiveLog('⚡ Vi SearchBot premium dashboard initialized.');
+  </script>
+</body>
+</html>
