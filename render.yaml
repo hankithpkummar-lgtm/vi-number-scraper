@@ -1,0 +1,44 @@
+# VI Number Scraper — Render Blueprint (free tier)
+# https://render.com/docs/blueprint-spec
+#
+# ═══════════════════════════════════════════════════════════════════
+# ONE-CLICK DEPLOY:
+#   Click: https://render.com/deploy?repo=https://github.com/hankithpkummar-lgtm/vi-number-scraper
+#   Then set the environment secrets below.
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+  - type: web
+    name: vi-number-scraper
+    runtime: docker
+    repo: https://github.com/hankithpkummar-lgtm/vi-number-scraper
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+    envVars:
+      - key: PORT
+        value: 7860
+      - key: HEADLESS
+        value: "true"
+      - key: AUTO_START_WORKERS
+        value: "true"
+      - key: NUM_WORKERS
+        value: 4
+      - key: MAX_WORKERS
+        value: 4
+      - key: GAS_URL
+        sync: false
+      - key: SCRAPER_USERNAME
+        sync: false
+      - key: SCRAPER_PASSWORD
+        sync: false
+      - key: SCRAPER_API_KEY
+        sync: false
+      - key: SCRAPER_FULLNAME
+        sync: false
+      - key: SCRAPER_MOBILE
+        sync: false
+      - key: SCRAPER_PINCODE
+        sync: false
+    healthCheckPath: /health
+    plan: free
