@@ -98,11 +98,11 @@ class Settings:
 
     def __post_init__(self) -> None:
         """Post-init validation and enforcement."""
-        # Enforce minimum 12 workers
-        if self.NUM_WORKERS < 12:
-            self.NUM_WORKERS = 12
+        # Enforce minimum 1 worker (env var controls actual count per environment)
+        if self.NUM_WORKERS < 1:
+            self.NUM_WORKERS = 1
         if self.MAX_WORKERS < self.NUM_WORKERS:
-            self.MAX_WORKERS = self.NUM_WORKERS * 2
+            self.MAX_WORKERS = max(self.NUM_WORKERS, 2)
         # AUTO RAM: workers can scale up to MAX_WORKERS based on available RAM
         # The autoRAM logic in workers.py will handle dynamic scaling
 
