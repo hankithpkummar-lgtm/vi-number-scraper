@@ -23,9 +23,9 @@ services:
       - key: AUTO_START_WORKERS
         value: "true"
       - key: NUM_WORKERS
-        value: 2
+        value: 3
       - key: MAX_WORKERS
-        value: 2
+        value: 3
       - key: GAS_URL
         sync: false
       - key: SCRAPER_USERNAME
